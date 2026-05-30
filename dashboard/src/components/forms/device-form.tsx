@@ -12,7 +12,7 @@ interface FormData {
 }
 
 interface DeviceFormProps {
-  defaultValues?: Partial<FormData & { id: number }>;
+  defaultValues?: any;
   onSubmit: (data: FormData) => void;
   onCancel: () => void;
   isLoading?: boolean;

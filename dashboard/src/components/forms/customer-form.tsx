@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 interface FormData { name: string; phone: string; address: string; nationalId: string; notes: string; }
 
 interface CustomerFormProps {
-  defaultValues?: Partial<FormData & { id: number }>;
+  defaultValues?: Partial<Record<keyof FormData, string | null> & { id: number }>;
   onSubmit: (data: FormData) => void;
   onCancel: () => void;
   isLoading?: boolean;

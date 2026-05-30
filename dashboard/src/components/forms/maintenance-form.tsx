@@ -25,7 +25,7 @@ interface UpdateData {
 
 interface MaintenanceFormProps {
   mode?: 'create' | 'update';
-  defaultValues?: Partial<CreateData & UpdateData & { id: number; status: string }>;
+  defaultValues?: any;
   onSubmit: (data: CreateData | UpdateData) => void;
   onCancel: () => void;
   isLoading?: boolean;
