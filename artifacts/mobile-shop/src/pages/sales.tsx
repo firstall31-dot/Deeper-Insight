@@ -4,28 +4,10 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search, Plus, ShoppingCart } from 'lucide-react';
 import { useState } from 'react';
-
-const PAYMENT_LABELS: Record<string, string> = {
-  cash: 'Cash',
-  vodafone_cash: 'Vodafone Cash',
-  etisalat_cash: 'Etisalat Cash',
-  we_pay: 'WE Pay',
-  instapay: 'InstaPay',
-  bank_transfer: 'Bank Transfer',
-};
-
-const PAYMENT_COLORS: Record<string, string> = {
-  cash: 'bg-green-100 text-green-800',
-  vodafone_cash: 'bg-red-100 text-red-800',
-  etisalat_cash: 'bg-orange-100 text-orange-800',
-  we_pay: 'bg-purple-100 text-purple-800',
-  instapay: 'bg-blue-100 text-blue-800',
-  bank_transfer: 'bg-gray-100 text-gray-800',
-};
+import { paymentLabel, paymentBadgeClass } from '@/lib/payment';
 
 export default function Sales() {
   const { t, language } = useLanguage();
@@ -85,8 +67,8 @@ export default function Sales() {
                       {new Date(sale.createdAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PAYMENT_COLORS[sale.paymentMethod] ?? ''}`}>
-                        {PAYMENT_LABELS[sale.paymentMethod] ?? sale.paymentMethod}
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${paymentBadgeClass(sale.paymentMethod)}`}>
+                        {paymentLabel(sale.paymentMethod)}
                       </span>
                     </TableCell>
                     <TableCell className="text-right font-medium">{sale.total.toLocaleString()} EGP</TableCell>

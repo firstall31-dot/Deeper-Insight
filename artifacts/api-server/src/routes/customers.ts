@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq, ilike, or } from "drizzle-orm";
 import { db, customersTable, salesTable, installmentsTable, maintenanceTable } from "@workspace/db";
+import { mapSale, mapCustomer, mapInstallment, mapMaintenance } from "../lib/mappers";
 import {
   ListCustomersQueryParams,
   ListCustomersResponse,
@@ -33,13 +34,7 @@ router.get("/customers", async (req, res): Promise<void> => {
   }
 
   const rows = await dbQuery.orderBy(customersTable.createdAt);
-  const customers = rows.map(r => ({
-    ...r,
-    totalDebt: Number(r.totalDebt),
-    createdAt: r.createdAt.toISOString(),
-  }));
-
-  res.json(ListCustomersResponse.parse(customers));
+  res.json(ListCustomersResponse.parse(rows.map(mapCustomer)));
 });
 
 router.post("/customers", async (req, res): Promise<void> => {
@@ -50,11 +45,7 @@ router.post("/customers", async (req, res): Promise<void> => {
   }
 
   const [customer] = await db.insert(customersTable).values(parsed.data).returning();
-  res.status(201).json({
-    ...customer,
-    totalDebt: Number(customer.totalDebt),
-    createdAt: customer.createdAt.toISOString(),
-  });
+  res.status(201).json(mapCustomer(customer));
 });
 
 router.get("/customers/:id", async (req, res): Promise<void> => {
@@ -70,41 +61,14 @@ router.get("/customers/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const salesRows = await db.select().from(salesTable).where(eq(salesTable.customerId, params.data.id));
-  const installmentRows = await db.select().from(installmentsTable).where(eq(installmentsTable.customerId, params.data.id));
-  const maintenanceRows = await db.select().from(maintenanceTable).where(eq(maintenanceTable.customerId, params.data.id));
-
-  const mapSale = (s: typeof salesRows[0]) => ({
-    ...s,
-    subtotal: Number(s.subtotal),
-    discount: Number(s.discount),
-    total: Number(s.total),
-    paidAmount: Number(s.paidAmount),
-    dueAmount: Number(s.dueAmount),
-    createdAt: s.createdAt.toISOString(),
-  });
-
-  const mapInstallment = (i: typeof installmentRows[0]) => ({
-    ...i,
-    totalAmount: Number(i.totalAmount),
-    downPayment: Number(i.downPayment),
-    installmentAmount: Number(i.installmentAmount),
-    remainingAmount: Number(i.remainingAmount),
-    createdAt: i.createdAt.toISOString(),
-  });
-
-  const mapMaintenance = (m: typeof maintenanceRows[0]) => ({
-    ...m,
-    estimatedCost: m.estimatedCost != null ? Number(m.estimatedCost) : null,
-    finalCost: m.finalCost != null ? Number(m.finalCost) : null,
-    createdAt: m.createdAt.toISOString(),
-    updatedAt: m.updatedAt.toISOString(),
-  });
+  const [salesRows, installmentRows, maintenanceRows] = await Promise.all([
+    db.select().from(salesTable).where(eq(salesTable.customerId, params.data.id)),
+    db.select().from(installmentsTable).where(eq(installmentsTable.customerId, params.data.id)),
+    db.select().from(maintenanceTable).where(eq(maintenanceTable.customerId, params.data.id)),
+  ]);
 
   res.json(GetCustomerResponse.parse({
-    ...customer,
-    totalDebt: Number(customer.totalDebt),
-    createdAt: customer.createdAt.toISOString(),
+    ...mapCustomer(customer),
     sales: salesRows.map(mapSale),
     installments: installmentRows.map(mapInstallment),
     maintenanceOrders: maintenanceRows.map(mapMaintenance),
@@ -130,11 +94,7 @@ router.patch("/customers/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(UpdateCustomerResponse.parse({
-    ...customer,
-    totalDebt: Number(customer.totalDebt),
-    createdAt: customer.createdAt.toISOString(),
-  }));
+  res.json(UpdateCustomerResponse.parse(mapCustomer(customer)));
 });
 
 router.delete("/customers/:id", async (req, res): Promise<void> => {

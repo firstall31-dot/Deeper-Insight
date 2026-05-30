@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq, ilike, or } from "drizzle-orm";
 import { db, devicesTable, customersTable, suppliersTable } from "@workspace/db";
+import { mapDevice } from "../lib/mappers";
 import {
   ListDevicesQueryParams,
   ListDevicesResponse,
@@ -14,15 +15,6 @@ import {
 
 const router = Router();
 
-const mapDevice = (d: typeof devicesTable.$inferSelect, customerName?: string | null, supplierName?: string | null) => ({
-  ...d,
-  purchasePrice: Number(d.purchasePrice),
-  salePrice: d.salePrice != null ? Number(d.salePrice) : null,
-  customerName: customerName ?? null,
-  customerPhone: null as string | null,
-  supplierName: supplierName ?? null,
-});
-
 router.get("/devices", async (req, res): Promise<void> => {
   const query = ListDevicesQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -30,7 +22,7 @@ router.get("/devices", async (req, res): Promise<void> => {
     return;
   }
 
-  const rows = await db
+  let dbQuery = db
     .select({
       id: devicesTable.id,
       brand: devicesTable.brand,
@@ -57,9 +49,8 @@ router.get("/devices", async (req, res): Promise<void> => {
     .leftJoin(customersTable, eq(devicesTable.customerId, customersTable.id))
     .$dynamic();
 
-  const conditions = [];
   if (query.data.search) {
-    conditions.push(
+    dbQuery = dbQuery.where(
       or(
         ilike(devicesTable.brand, `%${query.data.search}%`),
         ilike(devicesTable.model, `%${query.data.search}%`),
@@ -69,6 +60,7 @@ router.get("/devices", async (req, res): Promise<void> => {
     );
   }
 
+  const rows = await dbQuery;
   const devices = rows.map(r => ({
     ...r,
     purchasePrice: Number(r.purchasePrice),

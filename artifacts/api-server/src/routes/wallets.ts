@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, walletsTable, walletTransactionsTable } from "@workspace/db";
+import { mapWallet, mapWalletTx } from "../lib/mappers";
 import { cache } from "../lib/cache";
 import {
   ListWalletsResponse,
@@ -12,20 +13,6 @@ import {
 } from "@workspace/api-zod";
 
 const router = Router();
-
-const mapWallet = (w: typeof walletsTable.$inferSelect) => ({
-  ...w,
-  balance: Number(w.balance),
-});
-
-const mapTx = (t: typeof walletTransactionsTable.$inferSelect) => ({
-  ...t,
-  amount: Number(t.amount),
-  fee: Number(t.fee),
-  balanceBefore: Number(t.balanceBefore),
-  balanceAfter: Number(t.balanceAfter),
-  createdAt: t.createdAt.toISOString(),
-});
 
 router.get("/wallets", async (_req, res): Promise<void> => {
   const rows = await db.select().from(walletsTable).orderBy(walletsTable.name);
@@ -59,7 +46,7 @@ router.get("/wallets/:id/transactions", async (req, res): Promise<void> => {
     .where(eq(walletTransactionsTable.walletId, params.data.id))
     .orderBy(walletTransactionsTable.createdAt);
 
-  res.json(ListWalletTransactionsResponse.parse(rows.map(mapTx)));
+  res.json(ListWalletTransactionsResponse.parse(rows.map(mapWalletTx)));
 });
 
 router.post("/wallets/:id/transactions", async (req, res): Promise<void> => {
@@ -105,7 +92,7 @@ router.post("/wallets/:id/transactions", async (req, res): Promise<void> => {
   }).returning();
 
   cache.del("treasury:summary");
-  res.status(201).json(mapTx(tx));
+  res.status(201).json(mapWalletTx(tx));
 });
 
 export default router;

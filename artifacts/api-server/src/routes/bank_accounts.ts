@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, bankAccountsTable, bankTransactionsTable } from "@workspace/db";
+import { mapBankAccount, mapBankTx } from "../lib/mappers";
 import { cache } from "../lib/cache";
 import {
   ListBankAccountsResponse,
@@ -13,23 +14,9 @@ import {
 
 const router = Router();
 
-const mapAccount = (a: typeof bankAccountsTable.$inferSelect) => ({
-  ...a,
-  balance: Number(a.balance),
-});
-
-const mapTx = (t: typeof bankTransactionsTable.$inferSelect) => ({
-  ...t,
-  amount: Number(t.amount),
-  fee: Number(t.fee),
-  balanceBefore: Number(t.balanceBefore),
-  balanceAfter: Number(t.balanceAfter),
-  createdAt: t.createdAt.toISOString(),
-});
-
 router.get("/bank-accounts", async (_req, res): Promise<void> => {
   const rows = await db.select().from(bankAccountsTable).orderBy(bankAccountsTable.bankName);
-  res.json(ListBankAccountsResponse.parse(rows.map(mapAccount)));
+  res.json(ListBankAccountsResponse.parse(rows.map(mapBankAccount)));
 });
 
 router.post("/bank-accounts", async (req, res): Promise<void> => {
@@ -45,7 +32,7 @@ router.post("/bank-accounts", async (req, res): Promise<void> => {
   }).returning();
 
   cache.del("treasury:summary");
-  res.status(201).json(mapAccount(account));
+  res.status(201).json(mapBankAccount(account));
 });
 
 router.get("/bank-accounts/:id/transactions", async (req, res): Promise<void> => {
@@ -59,7 +46,7 @@ router.get("/bank-accounts/:id/transactions", async (req, res): Promise<void> =>
     .where(eq(bankTransactionsTable.bankAccountId, params.data.id))
     .orderBy(bankTransactionsTable.createdAt);
 
-  res.json(ListBankTransactionsResponse.parse(rows.map(mapTx)));
+  res.json(ListBankTransactionsResponse.parse(rows.map(mapBankTx)));
 });
 
 router.post("/bank-accounts/:id/transactions", async (req, res): Promise<void> => {
@@ -101,7 +88,7 @@ router.post("/bank-accounts/:id/transactions", async (req, res): Promise<void> =
   }).returning();
 
   cache.del("treasury:summary");
-  res.status(201).json(mapTx(tx));
+  res.status(201).json(mapBankTx(tx));
 });
 
 export default router;

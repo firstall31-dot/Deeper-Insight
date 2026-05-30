@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, returnsTable, salesTable } from "@workspace/db";
+import { mapReturn } from "../lib/mappers";
 import {
   ListReturnsResponse,
   CreateReturnBody,
@@ -10,12 +11,7 @@ const router = Router();
 
 router.get("/returns", async (_req, res): Promise<void> => {
   const rows = await db.select().from(returnsTable).orderBy(returnsTable.createdAt);
-  const returns = rows.map(r => ({
-    ...r,
-    amount: Number(r.amount),
-    createdAt: r.createdAt.toISOString(),
-  }));
-  res.json(ListReturnsResponse.parse(returns));
+  res.json(ListReturnsResponse.parse(rows.map(mapReturn)));
 });
 
 router.post("/returns", async (req, res): Promise<void> => {
@@ -41,11 +37,7 @@ router.post("/returns", async (req, res): Promise<void> => {
     employeeId: parsed.data.employeeId ?? null,
   }).returning();
 
-  res.status(201).json({
-    ...ret,
-    amount: Number(ret.amount),
-    createdAt: ret.createdAt.toISOString(),
-  });
+  res.status(201).json(mapReturn(ret));
 });
 
 export default router;

@@ -1,6 +1,7 @@
 import { Router } from "express";
-import { gte, and, sql, eq, lte } from "drizzle-orm";
+import { gte, eq, lte, sql } from "drizzle-orm";
 import { db, salesTable, expensesTable, installmentsTable, maintenanceTable, productsTable } from "@workspace/db";
+import { mapSale } from "../lib/mappers";
 import { GetDashboardSummaryResponse, GetDashboardAlertsResponse } from "@workspace/api-zod";
 import { cache, TTL } from "../lib/cache";
 
@@ -18,7 +19,6 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  // Use SQL aggregations — no full table scans in JS
   const [dailyRow] = await db
     .select({ total: sql<string>`COALESCE(SUM(total), 0)` })
     .from(salesTable)
@@ -53,7 +53,6 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
     .from(productsTable)
     .where(sql`quantity <= alert_quantity`);
 
-  // Payment method breakdown (one query)
   const paymentBreakdown = await db
     .select({
       method: salesTable.paymentMethod,
@@ -68,8 +67,7 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
     total: Number(paymentBreakdown.find(r => r.method === method)?.total ?? 0),
   }));
 
-  // Recent 5 sales
-  const recentSales = await db
+  const recentSalesRows = await db
     .select()
     .from(salesTable)
     .orderBy(sql`created_at DESC`)
@@ -88,16 +86,7 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
     overdueInstallments: Number(overdueRow?.count ?? 0),
     lowStockCount: Number(lowStockRow?.count ?? 0),
     salesByPaymentMethod,
-    recentSales: recentSales.map(s => ({
-      ...s,
-      subtotal: Number(s.subtotal),
-      discount: Number(s.discount),
-      total: Number(s.total),
-      paidAmount: Number(s.paidAmount),
-      dueAmount: Number(s.dueAmount),
-      createdAt: s.createdAt.toISOString(),
-      items: [],
-    })),
+    recentSales: recentSalesRows.map(mapSale),
   };
 
   const parsed = GetDashboardSummaryResponse.parse(result);
@@ -117,7 +106,6 @@ router.get("/dashboard/alerts", async (_req, res): Promise<void> => {
 
   const alerts: Array<{ id: string; type: string; message: string; severity: string; data?: object }> = [];
 
-  // Low stock — SQL WHERE, not full scan
   const lowStock = await db
     .select({ id: productsTable.id, name: productsTable.name, quantity: productsTable.quantity })
     .from(productsTable)
@@ -133,7 +121,6 @@ router.get("/dashboard/alerts", async (_req, res): Promise<void> => {
     });
   }
 
-  // Overdue installments
   const overdue = await db
     .select({ id: installmentsTable.id, customerName: installmentsTable.customerName, deviceName: installmentsTable.deviceName })
     .from(installmentsTable)
@@ -149,7 +136,6 @@ router.get("/dashboard/alerts", async (_req, res): Promise<void> => {
     });
   }
 
-  // Maintenance ready for pickup
   const readyForPickup = await db
     .select({ id: maintenanceTable.id, customerName: maintenanceTable.customerName, deviceType: maintenanceTable.deviceType })
     .from(maintenanceTable)

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { db, fawryBalanceTable, fawryTransactionsTable } from "@workspace/db";
+import { mapFawryTx } from "../lib/mappers";
 import { cache } from "../lib/cache";
 import {
   GetFawryBalanceResponse,
@@ -50,12 +51,7 @@ router.post("/fawry/balance", async (req, res): Promise<void> => {
 
 router.get("/fawry/transactions", async (_req, res): Promise<void> => {
   const rows = await db.select().from(fawryTransactionsTable).orderBy(fawryTransactionsTable.createdAt);
-  res.json(ListFawryTransactionsResponse.parse(rows.map(r => ({
-    ...r,
-    amount: Number(r.amount),
-    profit: Number(r.profit),
-    createdAt: r.createdAt.toISOString(),
-  }))));
+  res.json(ListFawryTransactionsResponse.parse(rows.map(mapFawryTx)));
 });
 
 router.post("/fawry/transactions", async (req, res): Promise<void> => {
@@ -75,13 +71,7 @@ router.post("/fawry/transactions", async (req, res): Promise<void> => {
 
   cache.del("treasury:summary");
   cache.invalidatePrefix("dashboard:");
-
-  res.status(201).json({
-    ...tx,
-    amount: Number(tx.amount),
-    profit: Number(tx.profit),
-    createdAt: tx.createdAt.toISOString(),
-  });
+  res.status(201).json(mapFawryTx(tx));
 });
 
 export default router;

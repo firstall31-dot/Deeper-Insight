@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, installmentsTable, customersTable } from "@workspace/db";
+import { mapInstallment } from "../lib/mappers";
 import { cache } from "../lib/cache";
 import {
   ListInstallmentsQueryParams,
@@ -14,15 +15,6 @@ import {
 } from "@workspace/api-zod";
 
 const router = Router();
-
-const mapInstallment = (i: typeof installmentsTable.$inferSelect) => ({
-  ...i,
-  totalAmount: Number(i.totalAmount),
-  downPayment: Number(i.downPayment),
-  installmentAmount: Number(i.installmentAmount),
-  remainingAmount: Number(i.remainingAmount),
-  createdAt: i.createdAt.toISOString(),
-});
 
 router.get("/installments", async (req, res): Promise<void> => {
   const query = ListInstallmentsQueryParams.safeParse(req.query);
@@ -114,9 +106,7 @@ router.patch("/installments/:id", async (req, res): Promise<void> => {
     updateData.paidInstallments = paid;
     const remaining = Number(current.totalAmount) - Number(current.downPayment) - (paid * Number(current.installmentAmount));
     updateData.remainingAmount = String(Math.max(0, remaining));
-    if (paid >= current.totalInstallments) {
-      updateData.status = "completed";
-    }
+    if (paid >= current.totalInstallments) updateData.status = "completed";
   }
   if (parsed.data.status !== undefined) updateData.status = parsed.data.status;
 

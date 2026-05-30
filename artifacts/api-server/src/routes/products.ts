@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq, ilike, or, lte, and } from "drizzle-orm";
 import { db, productsTable, suppliersTable } from "@workspace/db";
+import { mapProduct } from "../lib/mappers";
 import { cache } from "../lib/cache";
 import {
   ListProductsQueryParams,
@@ -15,19 +16,6 @@ import {
 } from "@workspace/api-zod";
 
 const router = Router();
-
-const mapProduct = (r: {
-  id: number; name: string; nameAr: string | null; code: string; barcode: string | null;
-  category: string; supplierId: number | null; supplierName: string | null;
-  purchasePrice: string; salePrice: string; minSalePrice: string;
-  quantity: number; alertQuantity: number; imageUrl: string | null; createdAt: Date;
-}) => ({
-  ...r,
-  purchasePrice: Number(r.purchasePrice),
-  salePrice: Number(r.salePrice),
-  minSalePrice: Number(r.minSalePrice),
-  createdAt: r.createdAt.toISOString(),
-});
 
 router.get("/products", async (req, res): Promise<void> => {
   const query = ListProductsQueryParams.safeParse(req.query);

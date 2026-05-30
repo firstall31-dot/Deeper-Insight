@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, softwareServicesTable } from "@workspace/db";
+import { mapSoftwareService } from "../lib/mappers";
 import {
   ListSoftwareServicesResponse,
   CreateSoftwareServiceBody,
@@ -11,16 +12,9 @@ import {
 
 const router = Router();
 
-const mapService = (s: typeof softwareServicesTable.$inferSelect) => ({
-  ...s,
-  cost: Number(s.cost),
-  salePrice: Number(s.salePrice),
-  createdAt: s.createdAt.toISOString(),
-});
-
 router.get("/software-services", async (_req, res): Promise<void> => {
   const rows = await db.select().from(softwareServicesTable).orderBy(softwareServicesTable.createdAt);
-  res.json(ListSoftwareServicesResponse.parse(rows.map(mapService)));
+  res.json(ListSoftwareServicesResponse.parse(rows.map(mapSoftwareService)));
 });
 
 router.post("/software-services", async (req, res): Promise<void> => {
@@ -36,7 +30,7 @@ router.post("/software-services", async (req, res): Promise<void> => {
     salePrice: String(parsed.data.salePrice),
   }).returning();
 
-  res.status(201).json(mapService(service));
+  res.status(201).json(mapSoftwareService(service));
 });
 
 router.patch("/software-services/:id", async (req, res): Promise<void> => {
@@ -65,7 +59,7 @@ router.patch("/software-services/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(UpdateSoftwareServiceResponse.parse(mapService(service)));
+  res.json(UpdateSoftwareServiceResponse.parse(mapSoftwareService(service)));
 });
 
 export default router;

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, employeesTable } from "@workspace/db";
+import { mapEmployee } from "../lib/mappers";
 import {
   ListEmployeesResponse,
   CreateEmployeeBody,
@@ -11,14 +12,6 @@ import {
 } from "@workspace/api-zod";
 
 const router = Router();
-
-const mapEmployee = (e: typeof employeesTable.$inferSelect) => ({
-  ...e,
-  salary: Number(e.salary),
-  advances: Number(e.advances),
-  deductions: Number(e.deductions),
-  createdAt: e.createdAt.toISOString(),
-});
 
 router.get("/employees", async (_req, res): Promise<void> => {
   const rows = await db.select().from(employeesTable).orderBy(employeesTable.name);

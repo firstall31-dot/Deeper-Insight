@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { eq, ilike, or } from "drizzle-orm";
 import { db, maintenanceTable } from "@workspace/db";
+import { mapMaintenance } from "../lib/mappers";
+import { generateTicketNumber } from "../lib/helpers";
 import { cache } from "../lib/cache";
 import {
   ListMaintenanceQueryParams,
@@ -15,21 +17,6 @@ import {
 
 const router = Router();
 
-let ticketCounter = 1000;
-
-function generateTicketNumber(): string {
-  ticketCounter++;
-  return `MNT-${ticketCounter}`;
-}
-
-const mapMaintenance = (m: typeof maintenanceTable.$inferSelect) => ({
-  ...m,
-  estimatedCost: m.estimatedCost != null ? Number(m.estimatedCost) : null,
-  finalCost: m.finalCost != null ? Number(m.finalCost) : null,
-  createdAt: m.createdAt.toISOString(),
-  updatedAt: m.updatedAt.toISOString(),
-});
-
 router.get("/maintenance", async (req, res): Promise<void> => {
   const query = ListMaintenanceQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -40,9 +27,7 @@ router.get("/maintenance", async (req, res): Promise<void> => {
   let dbQuery = db.select().from(maintenanceTable).$dynamic();
   const conditions = [];
 
-  if (query.data.status) {
-    conditions.push(eq(maintenanceTable.status, query.data.status));
-  }
+  if (query.data.status) conditions.push(eq(maintenanceTable.status, query.data.status));
   if (query.data.search) {
     conditions.push(
       or(
@@ -53,9 +38,7 @@ router.get("/maintenance", async (req, res): Promise<void> => {
     );
   }
 
-  if (conditions.length === 1) {
-    dbQuery = dbQuery.where(conditions[0]);
-  }
+  if (conditions.length === 1) dbQuery = dbQuery.where(conditions[0]);
 
   const rows = await dbQuery.orderBy(maintenanceTable.createdAt);
   res.json(ListMaintenanceResponse.parse(rows.map(mapMaintenance)));

@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { eq, ilike, gte, lte, and } from "drizzle-orm";
 import { db, salesTable, customersTable, productsTable } from "@workspace/db";
+import { mapSale } from "../lib/mappers";
+import { generateInvoiceNumber } from "../lib/helpers";
 import { cache } from "../lib/cache";
 import {
   ListSalesQueryParams,
@@ -13,24 +15,6 @@ import {
 
 const router = Router();
 
-const mapSale = (s: typeof salesTable.$inferSelect) => ({
-  ...s,
-  subtotal: Number(s.subtotal),
-  discount: Number(s.discount),
-  total: Number(s.total),
-  paidAmount: Number(s.paidAmount),
-  dueAmount: Number(s.dueAmount),
-  createdAt: s.createdAt.toISOString(),
-  items: (s.items as unknown[]) ?? [],
-});
-
-function generateInvoiceNumber(): string {
-  const now = new Date();
-  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
-  const rand = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
-  return `INV-${dateStr}-${rand}`;
-}
-
 router.get("/sales", async (req, res): Promise<void> => {
   const query = ListSalesQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -40,23 +24,11 @@ router.get("/sales", async (req, res): Promise<void> => {
 
   let dbQuery = db.select().from(salesTable).$dynamic();
   const conditions = [];
-
-  if (query.data.search) {
-    conditions.push(ilike(salesTable.customerName, `%${query.data.search}%`));
-  }
-  if (query.data.from) {
-    conditions.push(gte(salesTable.createdAt, new Date(query.data.from)));
-  }
-  if (query.data.to) {
-    conditions.push(lte(salesTable.createdAt, new Date(query.data.to)));
-  }
-  if (query.data.paymentMethod) {
-    conditions.push(eq(salesTable.paymentMethod, query.data.paymentMethod));
-  }
-
-  if (conditions.length > 0) {
-    dbQuery = dbQuery.where(and(...conditions));
-  }
+  if (query.data.search) conditions.push(ilike(salesTable.customerName, `%${query.data.search}%`));
+  if (query.data.from) conditions.push(gte(salesTable.createdAt, new Date(query.data.from)));
+  if (query.data.to) conditions.push(lte(salesTable.createdAt, new Date(query.data.to)));
+  if (query.data.paymentMethod) conditions.push(eq(salesTable.paymentMethod, query.data.paymentMethod));
+  if (conditions.length > 0) dbQuery = dbQuery.where(and(...conditions));
 
   const rows = await dbQuery.orderBy(salesTable.createdAt);
   res.json(ListSalesResponse.parse(rows.map(mapSale)));
@@ -71,27 +43,20 @@ router.post("/sales", async (req, res): Promise<void> => {
 
   const items = parsed.data.items ?? [];
 
-  // ── Sell-below-cost guard (requirement 18) ──────────────────────────
-  // Check each item with a productId against its minSalePrice
+  // ── Sell-below-cost guard (requirement 18) ────────────────────────────────
   const belowCostItems: Array<{ productName: string; unitPrice: number; minSalePrice: number }> = [];
-
   for (const item of items) {
     if (item.productId) {
       const [product] = await db.select().from(productsTable).where(eq(productsTable.id, item.productId));
       if (product) {
         const minPrice = Number(product.minSalePrice);
         if (minPrice > 0 && item.unitPrice < minPrice) {
-          belowCostItems.push({
-            productName: product.name,
-            unitPrice: item.unitPrice,
-            minSalePrice: minPrice,
-          });
+          belowCostItems.push({ productName: product.name, unitPrice: item.unitPrice, minSalePrice: minPrice });
         }
       }
     }
   }
 
-  // If allowBelowCost flag is not explicitly set (admin override), reject
   if (belowCostItems.length > 0 && !parsed.data.allowBelowCost) {
     res.status(422).json({
       error: "BELOW_MIN_PRICE",
@@ -100,7 +65,7 @@ router.post("/sales", async (req, res): Promise<void> => {
     });
     return;
   }
-  // ────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
 
   const subtotal = items.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
   const discount = parsed.data.discount ?? 0;
@@ -108,10 +73,8 @@ router.post("/sales", async (req, res): Promise<void> => {
   const paidAmount = parsed.data.paidAmount ?? 0;
   const dueAmount = Math.max(0, total - paidAmount);
 
-  const invoiceNumber = generateInvoiceNumber();
-
   const [sale] = await db.insert(salesTable).values({
-    invoiceNumber,
+    invoiceNumber: generateInvoiceNumber(),
     customerId: parsed.data.customerId ?? null,
     customerName: parsed.data.customerName,
     customerPhone: parsed.data.customerPhone ?? null,
@@ -125,7 +88,7 @@ router.post("/sales", async (req, res): Promise<void> => {
     notes: parsed.data.notes ?? null,
   }).returning();
 
-  // Update customer debt
+  // Update customer debt if partial payment
   if (parsed.data.customerId && dueAmount > 0) {
     const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, parsed.data.customerId));
     if (customer) {
@@ -147,7 +110,6 @@ router.post("/sales", async (req, res): Promise<void> => {
     }
   }
 
-  // Invalidate dashboard cache since sales affect KPIs
   cache.invalidatePrefix("dashboard:");
   cache.invalidatePrefix("reports:");
   cache.invalidatePrefix("treasury:");

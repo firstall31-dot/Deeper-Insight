@@ -3,24 +3,9 @@ import { useListWallets, useListBankAccounts, useGetFawryBalance, useListSales }
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Landmark, Wallet, Zap, Banknote, TrendingUp } from 'lucide-react';
+import { paymentLabel, paymentBadgeClass } from '@/lib/payment';
 
-const PAYMENT_LABELS: Record<string, string> = {
-  cash: 'Cash',
-  vodafone_cash: 'Vodafone Cash',
-  etisalat_cash: 'Etisalat Cash',
-  we_pay: 'WE Pay',
-  instapay: 'InstaPay',
-  bank_transfer: 'Bank Transfer',
-};
-
-const PAYMENT_COLORS: Record<string, string> = {
-  cash: 'bg-green-100 text-green-800',
-  vodafone_cash: 'bg-red-100 text-red-800',
-  etisalat_cash: 'bg-orange-100 text-orange-800',
-  we_pay: 'bg-purple-100 text-purple-800',
-  instapay: 'bg-blue-100 text-blue-800',
-  bank_transfer: 'bg-gray-100 text-gray-800',
-};
+const PAYMENT_METHODS = ["cash", "vodafone_cash", "etisalat_cash", "we_pay", "instapay", "bank_transfer"] as const;
 
 export default function Treasury() {
   const { t } = useLanguage();
@@ -35,9 +20,7 @@ export default function Treasury() {
   const banksTotal = banks?.reduce((s, b) => s + b.balance, 0) ?? 0;
   const fawryBalance = fawry?.remaining ?? 0;
 
-  // Revenue breakdown by payment method
-  const paymentMethods = ["cash", "vodafone_cash", "etisalat_cash", "we_pay", "instapay", "bank_transfer"];
-  const revenueByMethod = paymentMethods.map(method => ({
+  const revenueByMethod = PAYMENT_METHODS.map(method => ({
     method,
     total: sales?.filter(s => s.paymentMethod === method).reduce((sum, s) => sum + s.total, 0) ?? 0,
   })).filter(m => m.total > 0);
@@ -161,8 +144,8 @@ export default function Treasury() {
                 return (
                   <div key={method} className="space-y-1">
                     <div className="flex justify-between text-sm">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PAYMENT_COLORS[method]}`}>
-                        {PAYMENT_LABELS[method]}
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${paymentBadgeClass(method)}`}>
+                        {paymentLabel(method)}
                       </span>
                       <span className="font-medium">{total.toLocaleString()} EGP</span>
                     </div>
@@ -180,7 +163,7 @@ export default function Treasury() {
         </CardContent>
       </Card>
 
-      {/* Cash on Hand */}
+      {/* Cash Revenue */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

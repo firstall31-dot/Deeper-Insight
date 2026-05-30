@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq, ilike, or } from "drizzle-orm";
 import { db, suppliersTable } from "@workspace/db";
+import { mapSupplier } from "../lib/mappers";
 import {
   ListSuppliersQueryParams,
   ListSuppliersResponse,
@@ -14,13 +15,6 @@ import {
 } from "@workspace/api-zod";
 
 const router = Router();
-
-const mapSupplier = (s: typeof suppliersTable.$inferSelect) => ({
-  ...s,
-  totalPurchases: Number(s.totalPurchases),
-  totalDebt: Number(s.totalDebt),
-  createdAt: s.createdAt.toISOString(),
-});
 
 router.get("/suppliers", async (req, res): Promise<void> => {
   const query = ListSuppliersQueryParams.safeParse(req.query);

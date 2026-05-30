@@ -1,6 +1,8 @@
 import { Router } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db, employeeAttendanceTable, employeesTable } from "@workspace/db";
+import { mapAttendance } from "../lib/mappers";
+import { parseId } from "../lib/helpers";
 
 const router = Router();
 
@@ -11,8 +13,8 @@ function isValidStatus(v: unknown): v is typeof VALID_STATUS[number] {
 }
 
 router.get("/employees/:id/attendance", async (req, res): Promise<void> => {
-  const id = Number(req.params.id);
-  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const id = parseId(req.params.id);
+  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const { month } = req.query as { month?: string };
 
@@ -21,12 +23,12 @@ router.get("/employees/:id/attendance", async (req, res): Promise<void> => {
     .orderBy(employeeAttendanceTable.date);
 
   const filtered = month ? rows.filter(r => r.date.startsWith(month)) : rows;
-  res.json(filtered.map(r => ({ ...r, createdAt: r.createdAt.toISOString() })));
+  res.json(filtered.map(mapAttendance));
 });
 
 router.post("/employees/:id/attendance", async (req, res): Promise<void> => {
-  const id = Number(req.params.id);
-  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const id = parseId(req.params.id);
+  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const { date, checkIn, checkOut, status = "present", notes } = req.body as Record<string, string | undefined>;
 
@@ -52,12 +54,12 @@ router.post("/employees/:id/attendance", async (req, res): Promise<void> => {
     notes: notes ?? null,
   }).returning();
 
-  res.status(201).json({ ...record, createdAt: record.createdAt.toISOString() });
+  res.status(201).json(mapAttendance(record));
 });
 
 router.patch("/employees/:employeeId/attendance/:id", async (req, res): Promise<void> => {
-  const id = Number(req.params.id);
-  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const id = parseId(req.params.id);
+  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const { checkIn, checkOut, status, notes } = req.body as Record<string, string | undefined>;
 
@@ -78,7 +80,7 @@ router.patch("/employees/:employeeId/attendance/:id", async (req, res): Promise<
     .returning();
 
   if (!record) { res.status(404).json({ error: "Record not found" }); return; }
-  res.json({ ...record, createdAt: record.createdAt.toISOString() });
+  res.json(mapAttendance(record));
 });
 
 export default router;
