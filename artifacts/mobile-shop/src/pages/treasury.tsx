@@ -4,35 +4,40 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Landmark, Wallet, Zap, Banknote, TrendingUp } from 'lucide-react';
 import { paymentLabel, paymentBadgeClass } from '@/lib/payment';
+import { PageWrapper } from '@/components/ui/page-header';
 
-const PAYMENT_METHODS = ["cash", "vodafone_cash", "etisalat_cash", "we_pay", "instapay", "bank_transfer"] as const;
+const PAYMENT_METHODS = ['cash', 'vodafone_cash', 'etisalat_cash', 'we_pay', 'instapay', 'bank_transfer'] as const;
 
 export default function Treasury() {
   const { t } = useLanguage();
   const { data: wallets, isLoading: wLoading } = useListWallets();
-  const { data: banks, isLoading: bLoading } = useListBankAccounts();
-  const { data: fawry, isLoading: fLoading } = useGetFawryBalance();
-  const { data: sales, isLoading: sLoading } = useListSales();
+  const { data: banks,   isLoading: bLoading } = useListBankAccounts();
+  const { data: fawry,   isLoading: fLoading } = useGetFawryBalance();
+  const { data: sales,   isLoading: sLoading } = useListSales();
 
   const isLoading = wLoading || bLoading || fLoading || sLoading;
 
-  const walletsTotal = wallets?.reduce((s, w) => s + w.balance, 0) ?? 0;
-  const banksTotal = banks?.reduce((s, b) => s + b.balance, 0) ?? 0;
-  const fawryBalance = fawry?.remaining ?? 0;
+  const walletsTotal  = wallets?.reduce((s, w) => s + w.balance, 0) ?? 0;
+  const banksTotal    = banks?.reduce((s, b) => s + b.balance, 0) ?? 0;
+  const fawryBalance  = fawry?.remaining ?? 0;
 
-  const revenueByMethod = PAYMENT_METHODS.map(method => ({
-    method,
-    total: sales?.filter(s => s.paymentMethod === method).reduce((sum, s) => sum + s.total, 0) ?? 0,
-  })).filter(m => m.total > 0);
+  const revenueByMethod = PAYMENT_METHODS
+    .map(method => ({
+      method,
+      total: sales?.filter(s => s.paymentMethod === method).reduce((sum, s) => sum + s.total, 0) ?? 0,
+    }))
+    .filter(m => m.total > 0);
 
   const cashRevenue = revenueByMethod.find(m => m.method === 'cash')?.total ?? 0;
-  const grandTotal = walletsTotal + banksTotal + fawryBalance;
+  const grandTotal  = walletsTotal + banksTotal + fawryBalance;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Landmark className="h-6 w-6 text-primary" />
-        <h2 className="text-2xl font-bold tracking-tight">Treasury</h2>
+    <PageWrapper>
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20 shrink-0">
+          <Landmark className="h-5 w-5 text-primary" />
+        </div>
+        <h1 className="text-2xl font-bold tracking-tight">Treasury</h1>
       </div>
 
       {/* Grand Total */}
@@ -47,7 +52,6 @@ export default function Treasury() {
       </Card>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {/* Wallets */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -72,7 +76,6 @@ export default function Treasury() {
           </CardContent>
         </Card>
 
-        {/* Bank Accounts */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -97,7 +100,6 @@ export default function Treasury() {
           </CardContent>
         </Card>
 
-        {/* Fawry */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -128,15 +130,15 @@ export default function Treasury() {
       {/* Revenue by Payment Method */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
             <TrendingUp className="h-5 w-5 text-primary" />
-            Revenue by Payment Method (All Time)
+            Revenue by Payment Method
           </CardTitle>
         </CardHeader>
         <CardContent>
           {sLoading ? (
-            <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
-          ) : (
+            <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
+          ) : revenueByMethod.length > 0 ? (
             <div className="space-y-3">
               {revenueByMethod.map(({ method, total }) => {
                 const maxTotal = Math.max(...revenueByMethod.map(m => m.total), 1);
@@ -149,16 +151,15 @@ export default function Treasury() {
                       </span>
                       <span className="font-medium">{total.toLocaleString()} EGP</span>
                     </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 );
               })}
-              {revenueByMethod.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">No sales data yet.</p>
-              )}
             </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">No sales data yet.</p>
           )}
         </CardContent>
       </Card>
@@ -166,7 +167,7 @@ export default function Treasury() {
       {/* Cash Revenue */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
             <Banknote className="h-5 w-5 text-green-600" />
             Cash Revenue
           </CardTitle>
@@ -180,6 +181,6 @@ export default function Treasury() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageWrapper>
   );
 }

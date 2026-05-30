@@ -1,0 +1,28 @@
+{
+  "name": "MobilShop Pro",
+  "short_name": "MobilShop",
+  "description": "Mobile Shop POS & Management System",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f7fa",
+  "theme_color": "#16375e",
+  "orientation": "any",
+  "categories": ["business", "productivity"],
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/opengraph.jpg",
+      "sizes": "1200x630",
+      "type": "image/jpeg",
+      "label": "MobilShop Pro Dashboard"
+    }
+  ]
+}

@@ -1,16 +1,16 @@
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useListInstallments } from '@workspace/api-client-react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, CreditCard } from 'lucide-react';
+import { CreditCard } from 'lucide-react';
+import { PageHeader, PageWrapper } from '@/components/ui/page-header';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
 
 const STATUS_COLORS: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  active: 'default',
+  active:    'default',
   completed: 'outline',
-  overdue: 'destructive',
+  overdue:   'destructive',
   cancelled: 'secondary',
 };
 
@@ -19,40 +19,35 @@ export default function Installments() {
   const { data: installments, isLoading } = useListInstallments();
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <CreditCard className="h-6 w-6 text-primary" />
-          <h2 className="text-2xl font-bold tracking-tight">{t('nav.installments')}</h2>
-        </div>
-        <Button className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          {t('common.add')}
-        </Button>
-      </div>
+    <PageWrapper>
+      <PageHeader
+        icon={CreditCard}
+        title={t('nav.installments')}
+        onAdd={() => {}}
+      />
 
       <Card>
-        <CardContent className="pt-6">
-          {isLoading ? (
-            <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Device</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">Down Payment</TableHead>
-                  <TableHead className="text-right">Installment</TableHead>
-                  <TableHead className="text-center">Progress</TableHead>
-                  <TableHead className="text-right">Remaining</TableHead>
-                  <TableHead>{t('common.status')}</TableHead>
-                </TableRow>
-              </TableHeader>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="ps-4">Customer</TableHead>
+                <TableHead>Device</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">Down Payment</TableHead>
+                <TableHead className="text-right">Installment</TableHead>
+                <TableHead className="text-center">Progress</TableHead>
+                <TableHead className="text-right">Remaining</TableHead>
+                <TableHead className="pe-4">{t('common.status')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            {isLoading ? (
+              <TableSkeleton rows={5} cols={8} />
+            ) : (
               <TableBody>
                 {installments?.length ? installments.map((inst) => (
                   <TableRow key={inst.id}>
-                    <TableCell>
+                    <TableCell className="ps-4">
                       <div className="font-medium">{inst.customerName}</div>
                       <div className="text-xs text-muted-foreground">{inst.customerPhone}</div>
                     </TableCell>
@@ -61,16 +56,22 @@ export default function Installments() {
                     <TableCell className="text-right">{inst.downPayment.toLocaleString()} EGP</TableCell>
                     <TableCell className="text-right">{inst.installmentAmount.toLocaleString()} EGP</TableCell>
                     <TableCell className="text-center">
-                      <span className="text-sm font-medium">
-                        {inst.paidInstallments} / {inst.totalInstallments}
-                      </span>
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-sm font-medium">{inst.paidInstallments} / {inst.totalInstallments}</span>
+                        <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary rounded-full"
+                            style={{ width: `${(inst.paidInstallments / inst.totalInstallments) * 100}%` }}
+                          />
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <span className={inst.remainingAmount > 0 ? 'text-destructive font-medium' : 'text-muted-foreground'}>
+                      <span className={inst.remainingAmount > 0 ? 'text-destructive font-semibold' : 'text-muted-foreground'}>
                         {inst.remainingAmount.toLocaleString()} EGP
                       </span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="pe-4">
                       <Badge variant={STATUS_COLORS[inst.status] ?? 'secondary'}>{inst.status}</Badge>
                     </TableCell>
                   </TableRow>
@@ -80,10 +81,10 @@ export default function Installments() {
                   </TableRow>
                 )}
               </TableBody>
-            </Table>
-          )}
+            )}
+          </Table>
         </CardContent>
       </Card>
-    </div>
+    </PageWrapper>
   );
 }

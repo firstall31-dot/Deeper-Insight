@@ -1,84 +1,69 @@
+import { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useListDevices } from '@workspace/api-client-react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Search, Plus, Smartphone } from 'lucide-react';
-import { useState } from 'react';
+import { Smartphone } from 'lucide-react';
+import { PageHeader, PageWrapper } from '@/components/ui/page-header';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
+
+const CONDITION_STYLE: Record<string, string> = {
+  new:         'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+  used:        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+  refurbished: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+  damaged:     'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+};
 
 export default function Devices() {
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const [search, setSearch] = useState('');
   const { data: devices, isLoading } = useListDevices({ search });
 
-  const conditionColor: Record<string, string> = {
-    new: 'bg-green-100 text-green-800',
-    used: 'bg-yellow-100 text-yellow-800',
-    refurbished: 'bg-blue-100 text-blue-800',
-    damaged: 'bg-red-100 text-red-800',
-  };
-
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <Smartphone className="h-6 w-6 text-primary" />
-          <h2 className="text-2xl font-bold tracking-tight">{t('nav.devices')}</h2>
-        </div>
-        <Button className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          {t('common.add')}
-        </Button>
-      </div>
+    <PageWrapper>
+      <PageHeader
+        icon={Smartphone}
+        title={t('nav.devices')}
+        onAdd={() => {}}
+        search={search}
+        onSearch={setSearch}
+      />
 
       <Card>
-        <CardHeader className="py-4">
-          <div className="relative w-full max-w-sm">
-            <Search className={`absolute ${language === 'ar' ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground`} />
-            <Input
-              placeholder={t('common.search')}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className={language === 'ar' ? 'pr-9' : 'pl-9'}
-            />
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Brand / Model</TableHead>
-                  <TableHead>IMEI</TableHead>
-                  <TableHead>Storage</TableHead>
-                  <TableHead>Condition</TableHead>
-                  <TableHead className="text-right">Purchase Price</TableHead>
-                  <TableHead className="text-right">Sale Price</TableHead>
-                  <TableHead>{t('common.status')}</TableHead>
-                </TableRow>
-              </TableHeader>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="ps-4">Brand / Model</TableHead>
+                <TableHead>IMEI</TableHead>
+                <TableHead>Storage</TableHead>
+                <TableHead>Condition</TableHead>
+                <TableHead className="text-right">Purchase</TableHead>
+                <TableHead className="text-right">Sale Price</TableHead>
+                <TableHead className="pe-4">{t('common.status')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            {isLoading ? (
+              <TableSkeleton rows={6} cols={7} />
+            ) : (
               <TableBody>
                 {devices?.length ? devices.map((device) => (
                   <TableRow key={device.id}>
-                    <TableCell className="font-medium">{device.brand} {device.model}</TableCell>
+                    <TableCell className="ps-4 font-medium">{device.brand} {device.model}</TableCell>
                     <TableCell className="font-mono text-xs">
                       <div>{device.imei1}</div>
                       {device.imei2 && <div className="text-muted-foreground">{device.imei2}</div>}
                     </TableCell>
                     <TableCell>{device.storage ?? '—'}</TableCell>
                     <TableCell>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${conditionColor[device.condition] ?? ''}`}>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${CONDITION_STYLE[device.condition] ?? ''}`}>
                         {device.condition}
                       </span>
                     </TableCell>
                     <TableCell className="text-right">{device.purchasePrice.toLocaleString()} EGP</TableCell>
                     <TableCell className="text-right">{device.salePrice?.toLocaleString() ?? '—'} EGP</TableCell>
-                    <TableCell>
+                    <TableCell className="pe-4">
                       <Badge variant={device.sold ? 'secondary' : 'default'}>
                         {device.sold ? 'Sold' : 'Available'}
                       </Badge>
@@ -90,10 +75,10 @@ export default function Devices() {
                   </TableRow>
                 )}
               </TableBody>
-            </Table>
-          )}
+            )}
+          </Table>
         </CardContent>
       </Card>
-    </div>
+    </PageWrapper>
   );
 }
