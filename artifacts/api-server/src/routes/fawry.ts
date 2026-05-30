@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { gte } from "drizzle-orm";
 import { db, fawryBalanceTable, fawryTransactionsTable } from "@workspace/db";
+import { cache } from "../lib/cache";
 import {
   GetFawryBalanceResponse,
   AddFawryBalanceBody,
@@ -10,24 +10,23 @@ import {
 
 const router = Router();
 
-router.get("/fawry/balance", async (_req, res): Promise<void> => {
+async function computeBalance() {
   const allReceived = await db.select().from(fawryBalanceTable);
+  const allTx = await db.select().from(fawryTransactionsTable);
   const totalReceived = allReceived.reduce((sum, r) => sum + Number(r.received), 0);
-
+  const totalUsed = allTx.reduce((sum, t) => sum + Number(t.amount), 0);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const allTx = await db.select().from(fawryTransactionsTable);
-  const todayTx = allTx.filter(t => new Date(t.createdAt) >= today);
+  const todayProfit = allTx
+    .filter(t => new Date(t.createdAt) >= today)
+    .reduce((sum, t) => sum + Number(t.profit), 0);
 
-  const totalUsed = allTx.reduce((sum, t) => sum + Number(t.amount), 0);
-  const todayProfit = todayTx.reduce((sum, t) => sum + Number(t.profit), 0);
+  return { received: totalReceived, used: totalUsed, remaining: totalReceived - totalUsed, todayProfit };
+}
 
-  res.json(GetFawryBalanceResponse.parse({
-    received: totalReceived,
-    used: totalUsed,
-    remaining: totalReceived - totalUsed,
-    todayProfit,
-  }));
+router.get("/fawry/balance", async (_req, res): Promise<void> => {
+  const balance = await computeBalance();
+  res.json(GetFawryBalanceResponse.parse(balance));
 });
 
 router.post("/fawry/balance", async (req, res): Promise<void> => {
@@ -43,29 +42,20 @@ router.post("/fawry/balance", async (req, res): Promise<void> => {
     notes: parsed.data.notes ?? null,
   });
 
-  const allReceived = await db.select().from(fawryBalanceTable);
-  const totalReceived = allReceived.reduce((sum, r) => sum + Number(r.received), 0);
-  const allTx = await db.select().from(fawryTransactionsTable);
-  const totalUsed = allTx.reduce((sum, t) => sum + Number(t.amount), 0);
-
-  res.status(201).json(GetFawryBalanceResponse.parse({
-    received: totalReceived,
-    used: totalUsed,
-    remaining: totalReceived - totalUsed,
-    todayProfit: 0,
-  }));
+  cache.del("treasury:summary");
+  cache.invalidatePrefix("dashboard:");
+  const balance = await computeBalance();
+  res.status(201).json(GetFawryBalanceResponse.parse(balance));
 });
 
 router.get("/fawry/transactions", async (_req, res): Promise<void> => {
   const rows = await db.select().from(fawryTransactionsTable).orderBy(fawryTransactionsTable.createdAt);
-  const txs = rows.map(r => ({
+  res.json(ListFawryTransactionsResponse.parse(rows.map(r => ({
     ...r,
     amount: Number(r.amount),
     profit: Number(r.profit),
     createdAt: r.createdAt.toISOString(),
-  }));
-
-  res.json(ListFawryTransactionsResponse.parse(txs));
+  }))));
 });
 
 router.post("/fawry/transactions", async (req, res): Promise<void> => {
@@ -82,6 +72,9 @@ router.post("/fawry/transactions", async (req, res): Promise<void> => {
     customerPhone: parsed.data.customerPhone ?? null,
     notes: parsed.data.notes ?? null,
   }).returning();
+
+  cache.del("treasury:summary");
+  cache.invalidatePrefix("dashboard:");
 
   res.status(201).json({
     ...tx,

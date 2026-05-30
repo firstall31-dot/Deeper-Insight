@@ -1,6 +1,5 @@
 export const translations = {
   en: {
-    // Navigation
     nav: {
       dashboard: "Dashboard",
       inventory: "Inventory",
@@ -16,9 +15,9 @@ export const translations = {
       wallets: "Wallets",
       banks: "Banks",
       fawry: "Fawry",
-      reports: "Reports"
+      reports: "Reports",
+      treasury: "Treasury",
     },
-    // Common
     common: {
       save: "Save",
       cancel: "Cancel",
@@ -28,17 +27,16 @@ export const translations = {
       search: "Search...",
       loading: "Loading...",
       actions: "Actions",
-      status: "Status"
+      status: "Status",
     },
-    // Dashboard
     dashboard: {
       dailySales: "Daily Sales",
       monthlySales: "Monthly Sales",
       totalProfit: "Total Profit",
       totalExpenses: "Total Expenses",
       alerts: "Alerts",
-      recentSales: "Recent Sales"
-    }
+      recentSales: "Recent Sales",
+    },
   },
   ar: {
     nav: {
@@ -56,7 +54,8 @@ export const translations = {
       wallets: "المحافظ",
       banks: "البنوك",
       fawry: "فوري",
-      reports: "التقارير"
+      reports: "التقارير",
+      treasury: "الخزينة",
     },
     common: {
       save: "حفظ",
@@ -67,7 +66,7 @@ export const translations = {
       search: "بحث...",
       loading: "جاري التحميل...",
       actions: "إجراءات",
-      status: "الحالة"
+      status: "الحالة",
     },
     dashboard: {
       dailySales: "مبيعات اليوم",
@@ -75,28 +74,27 @@ export const translations = {
       totalProfit: "إجمالي الربح",
       totalExpenses: "إجمالي المصروفات",
       alerts: "تنبيهات",
-      recentSales: "أحدث المبيعات"
-    }
-  }
+      recentSales: "أحدث المبيعات",
+    },
+  },
 };
 
-export type Language = 'en' | 'ar';
-export type TranslationKey = string; // In a real app we'd use dot notation paths
+export type Language = "en" | "ar";
+export type TranslationKey = string;
 
 export function getTranslation(lang: Language, key: string): string {
-  const keys = key.split('.');
-  let current: any = translations[lang];
+  const keys = key.split(".");
+  let current: Record<string, unknown> = translations[lang];
   for (const k of keys) {
     if (current[k] === undefined) {
-      // Fallback to English if missing
-      let fallback: any = translations['en'];
+      let fallback: Record<string, unknown> = translations["en"];
       for (const fk of keys) {
         if (fallback[fk] === undefined) return key;
-        fallback = fallback[fk];
+        fallback = fallback[fk] as Record<string, unknown>;
       }
-      return fallback;
+      return fallback as unknown as string;
     }
-    current = current[k];
+    current = current[k] as Record<string, unknown>;
   }
-  return current;
+  return current as unknown as string;
 }

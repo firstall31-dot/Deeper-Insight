@@ -16,6 +16,9 @@ import walletsRouter from "./wallets";
 import bankAccountsRouter from "./bank_accounts";
 import fawryRouter from "./fawry";
 import reportsRouter from "./reports";
+import treasuryRouter from "./treasury";
+import auditLogRouter from "./audit_log";
+import attendanceRouter from "./attendance";
 
 const router: IRouter = Router();
 
@@ -36,5 +39,8 @@ router.use(walletsRouter);
 router.use(bankAccountsRouter);
 router.use(fawryRouter);
 router.use(reportsRouter);
+router.use(treasuryRouter);
+router.use(auditLogRouter);
+router.use(attendanceRouter);
 
 export default router;

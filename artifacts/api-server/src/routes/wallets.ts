@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, walletsTable, walletTransactionsTable } from "@workspace/db";
+import { cache } from "../lib/cache";
 import {
   ListWalletsResponse,
   CreateWalletBody,
@@ -43,6 +44,7 @@ router.post("/wallets", async (req, res): Promise<void> => {
     balance: String(parsed.data.balance ?? 0),
   }).returning();
 
+  cache.del("treasury:summary");
   res.status(201).json(mapWallet(wallet));
 });
 
@@ -102,6 +104,7 @@ router.post("/wallets/:id/transactions", async (req, res): Promise<void> => {
     notes: parsed.data.notes ?? null,
   }).returning();
 
+  cache.del("treasury:summary");
   res.status(201).json(mapTx(tx));
 });
 

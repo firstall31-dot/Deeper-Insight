@@ -17,4 +17,6 @@ export interface SaleInput {
   paymentMethod: SaleInputPaymentMethod;
   paidAmount: number;
   notes?: string;
+  /** Admin override — allow sale price below minimum sale price */
+  allowBelowCost?: boolean;
 }

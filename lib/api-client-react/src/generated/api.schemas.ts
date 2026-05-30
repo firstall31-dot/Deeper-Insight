@@ -411,6 +411,8 @@ export interface SaleInput {
   paymentMethod: SaleInputPaymentMethod;
   paidAmount: number;
   notes?: string;
+  /** Admin override — allow sale price below minimum sale price */
+  allowBelowCost?: boolean;
 }
 
 export type ReturnType = typeof ReturnType[keyof typeof ReturnType];

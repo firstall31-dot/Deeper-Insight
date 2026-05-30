@@ -19,6 +19,7 @@ import Wallets from "@/pages/wallets";
 import Banks from "@/pages/banks";
 import Fawry from "@/pages/fawry";
 import Reports from "@/pages/reports";
+import Treasury from "@/pages/treasury";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -49,6 +50,7 @@ function Router() {
         <Route path="/banks" component={Banks} />
         <Route path="/fawry" component={Fawry} />
         <Route path="/reports" component={Reports} />
+        <Route path="/treasury" component={Treasury} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

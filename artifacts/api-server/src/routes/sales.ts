@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq, ilike, gte, lte, and } from "drizzle-orm";
 import { db, salesTable, customersTable, productsTable } from "@workspace/db";
+import { cache } from "../lib/cache";
 import {
   ListSalesQueryParams,
   ListSalesResponse,
@@ -41,9 +42,7 @@ router.get("/sales", async (req, res): Promise<void> => {
   const conditions = [];
 
   if (query.data.search) {
-    conditions.push(
-      ilike(salesTable.customerName, `%${query.data.search}%`)
-    );
+    conditions.push(ilike(salesTable.customerName, `%${query.data.search}%`));
   }
   if (query.data.from) {
     conditions.push(gte(salesTable.createdAt, new Date(query.data.from)));
@@ -71,6 +70,38 @@ router.post("/sales", async (req, res): Promise<void> => {
   }
 
   const items = parsed.data.items ?? [];
+
+  // ── Sell-below-cost guard (requirement 18) ──────────────────────────
+  // Check each item with a productId against its minSalePrice
+  const belowCostItems: Array<{ productName: string; unitPrice: number; minSalePrice: number }> = [];
+
+  for (const item of items) {
+    if (item.productId) {
+      const [product] = await db.select().from(productsTable).where(eq(productsTable.id, item.productId));
+      if (product) {
+        const minPrice = Number(product.minSalePrice);
+        if (minPrice > 0 && item.unitPrice < minPrice) {
+          belowCostItems.push({
+            productName: product.name,
+            unitPrice: item.unitPrice,
+            minSalePrice: minPrice,
+          });
+        }
+      }
+    }
+  }
+
+  // If allowBelowCost flag is not explicitly set (admin override), reject
+  if (belowCostItems.length > 0 && !parsed.data.allowBelowCost) {
+    res.status(422).json({
+      error: "BELOW_MIN_PRICE",
+      message: "One or more items are priced below the minimum sale price",
+      items: belowCostItems,
+    });
+    return;
+  }
+  // ────────────────────────────────────────────────────────────────────
+
   const subtotal = items.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
   const discount = parsed.data.discount ?? 0;
   const total = subtotal - discount;
@@ -94,6 +125,7 @@ router.post("/sales", async (req, res): Promise<void> => {
     notes: parsed.data.notes ?? null,
   }).returning();
 
+  // Update customer debt
   if (parsed.data.customerId && dueAmount > 0) {
     const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, parsed.data.customerId));
     if (customer) {
@@ -103,15 +135,22 @@ router.post("/sales", async (req, res): Promise<void> => {
     }
   }
 
+  // Deduct stock for product items
   for (const item of items) {
     if (item.productId) {
       const [product] = await db.select().from(productsTable).where(eq(productsTable.id, item.productId));
       if (product) {
-        const newQty = Math.max(0, product.quantity - item.quantity);
-        await db.update(productsTable).set({ quantity: newQty }).where(eq(productsTable.id, item.productId));
+        await db.update(productsTable)
+          .set({ quantity: Math.max(0, product.quantity - item.quantity) })
+          .where(eq(productsTable.id, item.productId));
       }
     }
   }
+
+  // Invalidate dashboard cache since sales affect KPIs
+  cache.invalidatePrefix("dashboard:");
+  cache.invalidatePrefix("reports:");
+  cache.invalidatePrefix("treasury:");
 
   res.status(201).json(GetSaleResponse.parse({ ...mapSale(sale), items: items as never }));
 });
@@ -144,6 +183,10 @@ router.delete("/sales/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Sale not found" });
     return;
   }
+
+  cache.invalidatePrefix("dashboard:");
+  cache.invalidatePrefix("reports:");
+  cache.invalidatePrefix("treasury:");
 
   res.sendStatus(204);
 });

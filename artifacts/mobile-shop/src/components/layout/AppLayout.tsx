@@ -16,7 +16,8 @@ import {
   Building2,
   Phone,
   BarChart3,
-  Globe
+  Globe,
+  Landmark,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -36,6 +37,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { href: '/installments', icon: CreditCard, label: 'nav.installments' },
     { href: '/expenses', icon: Receipt, label: 'nav.expenses' },
     { href: '/employees', icon: UserCircle, label: 'nav.employees' },
+    { href: '/treasury', icon: Landmark, label: 'nav.treasury' },
     { href: '/wallets', icon: Wallet, label: 'nav.wallets' },
     { href: '/banks', icon: Building2, label: 'nav.banks' },
     { href: '/fawry', icon: Phone, label: 'nav.fawry' },

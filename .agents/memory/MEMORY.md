@@ -1,0 +1,6 @@
+- [Cache + Invalidation Pattern](cache-invalidation.md) — in-memory TTL cache in api-server/src/lib/cache.ts; ALL mutating routes must call cache.invalidatePrefix() after writes.
+- [DB Numeric → Number casting](db-numeric-cast.md) — Drizzle `numeric` columns return strings; always cast with Number() in route handlers before sending to client.
+- [zod/v4 not bundleable in api-server](zod-esbuild.md) — esbuild can't resolve `zod/v4` subpath in api-server; route files must NOT import from `zod/v4` directly — use @workspace/api-zod schemas or manual validation.
+- [Codegen + Lib rebuild order](codegen-rebuild.md) — after any OpenAPI spec change: codegen → typecheck:libs → restart api-server. Skipping typecheck:libs leaves stale generated declarations and breaks Vite.
+- [Sell-below-cost guard](sell-below-cost.md) — sales POST returns 422 with error "BELOW_MIN_PRICE" when item.unitPrice < product.minSalePrice; client must pass allowBelowCost:true (admin override) to proceed.
+- [Audit middleware](audit-middleware.md) — app.ts wires auditMiddleware BEFORE the main router; it fires after response on POST/PATCH/DELETE; failures are silently swallowed so they never affect the main request.

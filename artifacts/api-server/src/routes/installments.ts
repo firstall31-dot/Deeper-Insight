@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, installmentsTable, customersTable } from "@workspace/db";
+import { cache } from "../lib/cache";
 import {
   ListInstallmentsQueryParams,
   ListInstallmentsResponse,
@@ -31,9 +32,7 @@ router.get("/installments", async (req, res): Promise<void> => {
   }
 
   let dbQuery = db.select().from(installmentsTable).$dynamic();
-  if (query.data.status) {
-    dbQuery = dbQuery.where(eq(installmentsTable.status, query.data.status));
-  }
+  if (query.data.status) dbQuery = dbQuery.where(eq(installmentsTable.status, query.data.status));
 
   const rows = await dbQuery.orderBy(installmentsTable.createdAt);
   res.json(ListInstallmentsResponse.parse(rows.map(mapInstallment)));
@@ -70,6 +69,7 @@ router.post("/installments", async (req, res): Promise<void> => {
     status: "active",
   }).returning();
 
+  cache.invalidatePrefix("dashboard:");
   res.status(201).json(mapInstallment(installment));
 });
 
@@ -102,27 +102,27 @@ router.patch("/installments/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const updateData: Record<string, unknown> = {};
-  if (parsed.data.paidInstallments !== undefined) updateData.paidInstallments = parsed.data.paidInstallments;
-  if (parsed.data.status !== undefined) updateData.status = parsed.data.status;
-
   const [current] = await db.select().from(installmentsTable).where(eq(installmentsTable.id, params.data.id));
   if (!current) {
     res.status(404).json({ error: "Installment not found" });
     return;
   }
 
+  const updateData: Record<string, unknown> = {};
   if (parsed.data.paidInstallments !== undefined) {
     const paid = parsed.data.paidInstallments;
+    updateData.paidInstallments = paid;
     const remaining = Number(current.totalAmount) - Number(current.downPayment) - (paid * Number(current.installmentAmount));
     updateData.remainingAmount = String(Math.max(0, remaining));
     if (paid >= current.totalInstallments) {
       updateData.status = "completed";
     }
   }
+  if (parsed.data.status !== undefined) updateData.status = parsed.data.status;
 
   const [installment] = await db.update(installmentsTable).set(updateData).where(eq(installmentsTable.id, params.data.id)).returning();
 
+  cache.invalidatePrefix("dashboard:");
   res.json(UpdateInstallmentResponse.parse(mapInstallment(installment)));
 });
 

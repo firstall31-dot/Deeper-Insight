@@ -1,6 +1,7 @@
 import { Router } from "express";
-import { eq, ilike, or, lte } from "drizzle-orm";
+import { eq, ilike, or, lte, and } from "drizzle-orm";
 import { db, productsTable, suppliersTable } from "@workspace/db";
+import { cache } from "../lib/cache";
 import {
   ListProductsQueryParams,
   ListProductsResponse,
@@ -14,6 +15,19 @@ import {
 } from "@workspace/api-zod";
 
 const router = Router();
+
+const mapProduct = (r: {
+  id: number; name: string; nameAr: string | null; code: string; barcode: string | null;
+  category: string; supplierId: number | null; supplierName: string | null;
+  purchasePrice: string; salePrice: string; minSalePrice: string;
+  quantity: number; alertQuantity: number; imageUrl: string | null; createdAt: Date;
+}) => ({
+  ...r,
+  purchasePrice: Number(r.purchasePrice),
+  salePrice: Number(r.salePrice),
+  minSalePrice: Number(r.minSalePrice),
+  createdAt: r.createdAt.toISOString(),
+});
 
 router.get("/products", async (req, res): Promise<void> => {
   const query = ListProductsQueryParams.safeParse(req.query);
@@ -56,25 +70,18 @@ router.get("/products", async (req, res): Promise<void> => {
   if (query.data.category) {
     conditions.push(eq(productsTable.category, query.data.category));
   }
-  if (query.data.lowStock === true || query.data.lowStock === "true" as never) {
+  if (query.data.lowStock === true || String(query.data.lowStock) === "true") {
     conditions.push(lte(productsTable.quantity, productsTable.alertQuantity));
   }
 
-  if (conditions.length > 0) {
-    dbQuery = dbQuery.where(conditions.length === 1 ? conditions[0] : conditions.reduce((a, b) => or(a, b) as never));
+  if (conditions.length === 1) {
+    dbQuery = dbQuery.where(conditions[0]);
+  } else if (conditions.length > 1) {
+    dbQuery = dbQuery.where(and(...conditions));
   }
 
   const rows = await dbQuery.orderBy(productsTable.createdAt);
-
-  const products = rows.map(r => ({
-    ...r,
-    purchasePrice: Number(r.purchasePrice),
-    salePrice: Number(r.salePrice),
-    minSalePrice: Number(r.minSalePrice),
-    createdAt: r.createdAt.toISOString(),
-  }));
-
-  res.json(ListProductsResponse.parse(products));
+  res.json(ListProductsResponse.parse(rows.map(mapProduct)));
 });
 
 router.post("/products", async (req, res): Promise<void> => {
@@ -99,18 +106,17 @@ router.post("/products", async (req, res): Promise<void> => {
     imageUrl: parsed.data.imageUrl,
   }).returning();
 
+  cache.invalidatePrefix("dashboard:");
+  cache.invalidatePrefix("reports:");
+
   const supplier = product.supplierId
     ? await db.select().from(suppliersTable).where(eq(suppliersTable.id, product.supplierId)).limit(1).then(r => r[0])
     : null;
 
-  res.status(201).json(GetProductResponse.parse({
+  res.status(201).json(GetProductResponse.parse(mapProduct({
     ...product,
     supplierName: supplier?.name ?? null,
-    purchasePrice: Number(product.purchasePrice),
-    salePrice: Number(product.salePrice),
-    minSalePrice: Number(product.minSalePrice),
-    createdAt: product.createdAt.toISOString(),
-  }));
+  })));
 });
 
 router.get("/products/:id", async (req, res): Promise<void> => {
@@ -147,14 +153,7 @@ router.get("/products/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const r = rows[0];
-  res.json(GetProductResponse.parse({
-    ...r,
-    purchasePrice: Number(r.purchasePrice),
-    salePrice: Number(r.salePrice),
-    minSalePrice: Number(r.minSalePrice),
-    createdAt: r.createdAt.toISOString(),
-  }));
+  res.json(GetProductResponse.parse(mapProduct(rows[0])));
 });
 
 router.patch("/products/:id", async (req, res): Promise<void> => {
@@ -190,14 +189,10 @@ router.patch("/products/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(UpdateProductResponse.parse({
-    ...product,
-    supplierName: null,
-    purchasePrice: Number(product.purchasePrice),
-    salePrice: Number(product.salePrice),
-    minSalePrice: Number(product.minSalePrice),
-    createdAt: product.createdAt.toISOString(),
-  }));
+  cache.invalidatePrefix("dashboard:");
+  cache.invalidatePrefix("reports:");
+
+  res.json(UpdateProductResponse.parse(mapProduct({ ...product, supplierName: null })));
 });
 
 router.delete("/products/:id", async (req, res): Promise<void> => {
@@ -213,6 +208,8 @@ router.delete("/products/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  cache.invalidatePrefix("dashboard:");
+  cache.invalidatePrefix("reports:");
   res.sendStatus(204);
 });
 

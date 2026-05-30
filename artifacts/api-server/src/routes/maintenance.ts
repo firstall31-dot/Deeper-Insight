@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq, ilike, or } from "drizzle-orm";
 import { db, maintenanceTable } from "@workspace/db";
+import { cache } from "../lib/cache";
 import {
   ListMaintenanceQueryParams,
   ListMaintenanceResponse,
@@ -73,6 +74,7 @@ router.post("/maintenance", async (req, res): Promise<void> => {
     estimatedCost: parsed.data.estimatedCost != null ? String(parsed.data.estimatedCost) : null,
   }).returning();
 
+  cache.invalidatePrefix("dashboard:");
   res.status(201).json(GetMaintenanceResponse.parse(mapMaintenance(order)));
 });
 
@@ -118,6 +120,7 @@ router.patch("/maintenance/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  cache.invalidatePrefix("dashboard:");
   res.json(UpdateMaintenanceResponse.parse(mapMaintenance(order)));
 });
 

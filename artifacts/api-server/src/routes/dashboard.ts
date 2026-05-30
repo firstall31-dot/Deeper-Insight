@@ -1,52 +1,94 @@
 import { Router } from "express";
-import { gte, sql } from "drizzle-orm";
+import { gte, and, sql, eq, lte } from "drizzle-orm";
 import { db, salesTable, expensesTable, installmentsTable, maintenanceTable, productsTable } from "@workspace/db";
 import { GetDashboardSummaryResponse, GetDashboardAlertsResponse } from "@workspace/api-zod";
+import { cache, TTL } from "../lib/cache";
 
 const router = Router();
 
 router.get("/dashboard/summary", async (_req, res): Promise<void> => {
+  const cached = cache.get<unknown>("dashboard:summary");
+  if (cached) {
+    res.setHeader("X-Cache", "HIT");
+    res.json(cached);
+    return;
+  }
+
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const allSales = await db.select().from(salesTable);
-  const todaySales = allSales.filter(s => s.createdAt >= todayStart);
-  const monthSales = allSales.filter(s => s.createdAt >= monthStart);
+  // Use SQL aggregations — no full table scans in JS
+  const [dailyRow] = await db
+    .select({ total: sql<string>`COALESCE(SUM(total), 0)` })
+    .from(salesTable)
+    .where(gte(salesTable.createdAt, todayStart));
 
-  const dailySales = todaySales.reduce((sum, s) => sum + Number(s.total), 0);
-  const monthlySales = monthSales.reduce((sum, s) => sum + Number(s.total), 0);
+  const [monthlyRow] = await db
+    .select({ total: sql<string>`COALESCE(SUM(total), 0)`, cost: sql<string>`COALESCE(SUM(total * 0.7), 0)` })
+    .from(salesTable)
+    .where(gte(salesTable.createdAt, monthStart));
 
-  const allExpenses = await db.select().from(expensesTable);
-  const totalExpenses = allExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  const [expenseRow] = await db
+    .select({ total: sql<string>`COALESCE(SUM(amount), 0)` })
+    .from(expensesTable);
 
-  const allInstallments = await db.select().from(installmentsTable);
-  const totalDebt = allInstallments
-    .filter(i => i.status === "active" || i.status === "overdue")
-    .reduce((sum, i) => sum + Number(i.remainingAmount), 0);
+  const [debtRow] = await db
+    .select({ total: sql<string>`COALESCE(SUM(remaining_amount), 0)` })
+    .from(installmentsTable)
+    .where(sql`status IN ('active', 'overdue')`);
 
-  const overdueInstallments = allInstallments.filter(i => i.status === "overdue").length;
+  const [overdueRow] = await db
+    .select({ count: sql<string>`COUNT(*)` })
+    .from(installmentsTable)
+    .where(eq(installmentsTable.status, "overdue"));
 
-  const maintenanceOrders = await db.select().from(maintenanceTable);
-  const maintenanceCount = maintenanceOrders.filter(m => m.status !== "delivered").length;
+  const [maintenanceRow] = await db
+    .select({ count: sql<string>`COUNT(*)` })
+    .from(maintenanceTable)
+    .where(sql`status != 'delivered'`);
 
-  const products = await db.select().from(productsTable);
-  const lowStockCount = products.filter(p => p.quantity <= p.alertQuantity).length;
+  const [lowStockRow] = await db
+    .select({ count: sql<string>`COUNT(*)` })
+    .from(productsTable)
+    .where(sql`quantity <= alert_quantity`);
 
-  const totalRevenue = monthlySales;
-  const totalCost = monthSales.reduce((sum, s) => sum + (Number(s.total) * 0.7), 0);
-  const totalProfit = totalRevenue - totalCost;
+  // Payment method breakdown (one query)
+  const paymentBreakdown = await db
+    .select({
+      method: salesTable.paymentMethod,
+      total: sql<string>`SUM(total)`,
+    })
+    .from(salesTable)
+    .groupBy(salesTable.paymentMethod);
 
   const paymentMethods = ["cash", "vodafone_cash", "etisalat_cash", "we_pay", "instapay", "bank_transfer"];
   const salesByPaymentMethod = paymentMethods.map(method => ({
     method,
-    total: allSales.filter(s => s.paymentMethod === method).reduce((sum, s) => sum + Number(s.total), 0),
+    total: Number(paymentBreakdown.find(r => r.method === method)?.total ?? 0),
   }));
 
-  const recentSales = allSales
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .slice(0, 5)
-    .map(s => ({
+  // Recent 5 sales
+  const recentSales = await db
+    .select()
+    .from(salesTable)
+    .orderBy(sql`created_at DESC`)
+    .limit(5);
+
+  const monthlySales = Number(monthlyRow?.total ?? 0);
+  const totalCost = Number(monthlyRow?.cost ?? 0);
+
+  const result = {
+    dailySales: Number(dailyRow?.total ?? 0),
+    monthlySales,
+    totalProfit: monthlySales - totalCost,
+    totalExpenses: Number(expenseRow?.total ?? 0),
+    totalDebt: Number(debtRow?.total ?? 0),
+    maintenanceCount: Number(maintenanceRow?.count ?? 0),
+    overdueInstallments: Number(overdueRow?.count ?? 0),
+    lowStockCount: Number(lowStockRow?.count ?? 0),
+    salesByPaymentMethod,
+    recentSales: recentSales.map(s => ({
       ...s,
       subtotal: Number(s.subtotal),
       discount: Number(s.discount),
@@ -55,27 +97,32 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
       dueAmount: Number(s.dueAmount),
       createdAt: s.createdAt.toISOString(),
       items: [],
-    }));
+    })),
+  };
 
-  res.json(GetDashboardSummaryResponse.parse({
-    dailySales,
-    monthlySales,
-    totalProfit,
-    totalExpenses,
-    totalDebt,
-    maintenanceCount,
-    overdueInstallments,
-    lowStockCount,
-    salesByPaymentMethod,
-    recentSales,
-  }));
+  const parsed = GetDashboardSummaryResponse.parse(result);
+  cache.set("dashboard:summary", parsed, TTL.DASHBOARD);
+
+  res.setHeader("X-Cache", "MISS");
+  res.json(parsed);
 });
 
 router.get("/dashboard/alerts", async (_req, res): Promise<void> => {
+  const cached = cache.get<unknown>("dashboard:alerts");
+  if (cached) {
+    res.setHeader("X-Cache", "HIT");
+    res.json(cached);
+    return;
+  }
+
   const alerts: Array<{ id: string; type: string; message: string; severity: string; data?: object }> = [];
 
-  const products = await db.select().from(productsTable);
-  const lowStock = products.filter(p => p.quantity <= p.alertQuantity);
+  // Low stock — SQL WHERE, not full scan
+  const lowStock = await db
+    .select({ id: productsTable.id, name: productsTable.name, quantity: productsTable.quantity })
+    .from(productsTable)
+    .where(sql`quantity <= alert_quantity`);
+
   for (const p of lowStock) {
     alerts.push({
       id: `low_stock_${p.id}`,
@@ -86,8 +133,12 @@ router.get("/dashboard/alerts", async (_req, res): Promise<void> => {
     });
   }
 
-  const installments = await db.select().from(installmentsTable);
-  const overdue = installments.filter(i => i.status === "overdue");
+  // Overdue installments
+  const overdue = await db
+    .select({ id: installmentsTable.id, customerName: installmentsTable.customerName, deviceName: installmentsTable.deviceName })
+    .from(installmentsTable)
+    .where(eq(installmentsTable.status, "overdue"));
+
   for (const inst of overdue) {
     alerts.push({
       id: `overdue_install_${inst.id}`,
@@ -98,9 +149,13 @@ router.get("/dashboard/alerts", async (_req, res): Promise<void> => {
     });
   }
 
-  const maintenance = await db.select().from(maintenanceTable);
-  const pending = maintenance.filter(m => m.status === "repaired");
-  for (const m of pending) {
+  // Maintenance ready for pickup
+  const readyForPickup = await db
+    .select({ id: maintenanceTable.id, customerName: maintenanceTable.customerName, deviceType: maintenanceTable.deviceType })
+    .from(maintenanceTable)
+    .where(eq(maintenanceTable.status, "repaired"));
+
+  for (const m of readyForPickup) {
     alerts.push({
       id: `maintenance_${m.id}`,
       type: "maintenance_pending",
@@ -110,7 +165,11 @@ router.get("/dashboard/alerts", async (_req, res): Promise<void> => {
     });
   }
 
-  res.json(GetDashboardAlertsResponse.parse(alerts));
+  const parsed = GetDashboardAlertsResponse.parse(alerts);
+  cache.set("dashboard:alerts", parsed, TTL.DASHBOARD);
+
+  res.setHeader("X-Cache", "MISS");
+  res.json(parsed);
 });
 
 export default router;

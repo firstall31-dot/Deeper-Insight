@@ -1651,6 +1651,9 @@ components:
           type: number
         notes:
           type: string
+        allowBelowCost:
+          type: boolean
+          description: Admin override — allow sale price below minimum sale price
 
     # ─── RETURNS ─────────────────────────────────────────────────
     Return:

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, bankAccountsTable, bankTransactionsTable } from "@workspace/db";
+import { cache } from "../lib/cache";
 import {
   ListBankAccountsResponse,
   CreateBankAccountBody,
@@ -43,6 +44,7 @@ router.post("/bank-accounts", async (req, res): Promise<void> => {
     balance: String(parsed.data.balance ?? 0),
   }).returning();
 
+  cache.del("treasury:summary");
   res.status(201).json(mapAccount(account));
 });
 
@@ -82,13 +84,9 @@ router.post("/bank-accounts/:id/transactions", async (req, res): Promise<void> =
   const balanceBefore = Number(account.balance);
   const amount = parsed.data.amount;
   const fee = parsed.data.fee ?? 0;
-  let balanceAfter = balanceBefore;
-
-  if (parsed.data.type === "deposit") {
-    balanceAfter = balanceBefore + amount - fee;
-  } else {
-    balanceAfter = balanceBefore - amount - fee;
-  }
+  const balanceAfter = parsed.data.type === "deposit"
+    ? balanceBefore + amount - fee
+    : balanceBefore - amount - fee;
 
   await db.update(bankAccountsTable).set({ balance: String(balanceAfter) }).where(eq(bankAccountsTable.id, params.data.id));
 
@@ -102,6 +100,7 @@ router.post("/bank-accounts/:id/transactions", async (req, res): Promise<void> =
     notes: parsed.data.notes ?? null,
   }).returning();
 
+  cache.del("treasury:summary");
   res.status(201).json(mapTx(tx));
 });
 

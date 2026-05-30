@@ -514,7 +514,8 @@ export const CreateSaleBody = zod.object({
   "discount": zod.number().optional(),
   "paymentMethod": zod.enum(['cash', 'vodafone_cash', 'etisalat_cash', 'we_pay', 'instapay', 'bank_transfer']),
   "paidAmount": zod.number(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "allowBelowCost": zod.boolean().optional().describe('Admin override — allow sale price below minimum sale price')
 })
 
 

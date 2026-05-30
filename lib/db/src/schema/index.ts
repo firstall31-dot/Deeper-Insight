@@ -12,3 +12,6 @@ export * from "./installments";
 export * from "./wallets";
 export * from "./bank_accounts";
 export * from "./fawry";
+export * from "./users";
+export * from "./audit_log";
+export * from "./employee_attendance";

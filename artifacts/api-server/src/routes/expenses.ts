@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { db, expensesTable } from "@workspace/db";
+import { cache } from "../lib/cache";
 import {
   ListExpensesQueryParams,
   ListExpensesResponse,
@@ -19,29 +20,17 @@ router.get("/expenses", async (req, res): Promise<void> => {
 
   let dbQuery = db.select().from(expensesTable).$dynamic();
   const conditions = [];
-
-  if (query.data.category) {
-    conditions.push(eq(expensesTable.category, query.data.category));
-  }
-  if (query.data.from) {
-    conditions.push(gte(expensesTable.date, query.data.from));
-  }
-  if (query.data.to) {
-    conditions.push(lte(expensesTable.date, query.data.to));
-  }
-
-  if (conditions.length > 0) {
-    dbQuery = dbQuery.where(and(...conditions));
-  }
+  if (query.data.category) conditions.push(eq(expensesTable.category, query.data.category));
+  if (query.data.from) conditions.push(gte(expensesTable.date, query.data.from));
+  if (query.data.to) conditions.push(lte(expensesTable.date, query.data.to));
+  if (conditions.length > 0) dbQuery = dbQuery.where(and(...conditions));
 
   const rows = await dbQuery.orderBy(expensesTable.date);
-  const expenses = rows.map(r => ({
+  res.json(ListExpensesResponse.parse(rows.map(r => ({
     ...r,
     amount: Number(r.amount),
     createdAt: r.createdAt.toISOString(),
-  }));
-
-  res.json(ListExpensesResponse.parse(expenses));
+  }))));
 });
 
 router.post("/expenses", async (req, res): Promise<void> => {
@@ -55,6 +44,9 @@ router.post("/expenses", async (req, res): Promise<void> => {
     ...parsed.data,
     amount: String(parsed.data.amount),
   }).returning();
+
+  cache.invalidatePrefix("dashboard:");
+  cache.invalidatePrefix("reports:");
 
   res.status(201).json({
     ...expense,
@@ -76,6 +68,8 @@ router.delete("/expenses/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  cache.invalidatePrefix("dashboard:");
+  cache.invalidatePrefix("reports:");
   res.sendStatus(204);
 });
 

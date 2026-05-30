@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { auditMiddleware } from "./middleware/audit";
 
 const app: Express = express();
 
@@ -28,6 +29,9 @@ app.use(
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Audit trail — logs all mutating requests after response is sent
+app.use("/api", auditMiddleware);
 
 app.use("/api", router);
 
